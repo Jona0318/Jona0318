@@ -3,10 +3,6 @@
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Jona0318/Jona0318/output/stats-dark.svg" />
     <img height="170" src="https://raw.githubusercontent.com/Jona0318/Jona0318/output/stats.svg" alt="GitHub stats" />
   </picture>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Jona0318/Jona0318/output/top-langs-dark.svg" />
-    <img height="170" src="https://raw.githubusercontent.com/Jona0318/Jona0318/output/top-langs.svg" alt="Top languages" />
-  </picture>
 </p>
 
 <p align="center">

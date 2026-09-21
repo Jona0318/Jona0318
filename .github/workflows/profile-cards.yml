@@ -32,22 +32,6 @@ jobs:
           path: dist/stats-dark.svg
           token: ${{ secrets.STATS_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Top languages card (light)
-        uses: stats-organization/github-readme-stats-action@v2
-        with:
-          card: top-langs
-          options: username=${{ github.repository_owner }}&layout=compact&hide_border=true&langs_count=8
-          path: dist/top-langs.svg
-          token: ${{ secrets.STATS_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Top languages card (dark)
-        uses: stats-organization/github-readme-stats-action@v2
-        with:
-          card: top-langs
-          options: username=${{ github.repository_owner }}&layout=compact&hide_border=true&langs_count=8&theme=github_dark
-          path: dist/top-langs-dark.svg
-          token: ${{ secrets.STATS_TOKEN || secrets.GITHUB_TOKEN }}
-
       - name: Snake animation
         uses: Platane/snk@v3
         with:
