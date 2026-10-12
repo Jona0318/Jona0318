@@ -11,7 +11,7 @@
  * skyline; with prefers-reduced-motion it shows the skyline straight away.
  *
  * Usage:
- *   GITHUB_TOKEN=… node contribution-skyline.mjs --user <login> --out <dir>
+ *   node contribution-skyline.mjs --user <login> --out <dir>
  *   node contribution-skyline.mjs --demo --out <dir>      (seeded sample year, no network)
  *
  * Writes contribution-skyline.svg and contribution-skyline-dark.svg. Any
@@ -441,20 +441,46 @@ export function buildModel(data, locale = "en-US") {
   return { ...grid, stats: computeStats(grid.cells), months: monthLabels(grid.cells, grid.weeks, locale) }
 }
 
-const QUERY = `query($login:String!){user(login:$login){contributionsCollection{contributionCalendar{weeks{contributionDays{date contributionCount}}}}}}`
+/**
+ * Reads the public contribution calendar — the exact graph the profile shows, private contributions
+ * included when the profile opts in to showing them. The API only offers that to a token with access
+ * to those private repos; this needs no token at all.
+ *
+ * It's HTML, not an API, so it is parsed strictly: every day cell must have a tooltip with a count that
+ * agrees with the cell's level, and the days must form an unbroken run of about a year. Anything else
+ * throws, so a markup change fails the job instead of publishing an empty or partial chart.
+ */
+export const parseCalendar = (html) => {
+  const tips = new Map()
+  for (const m of html.matchAll(/<tool-tip\b[^>]*\bfor="([^"]+)"[^>]*>([^<]*)<\/tool-tip>/g)) tips.set(m[1], m[2].trim())
+  const days = []
+  for (const m of html.matchAll(/<td\b[^>]*>/g)) {
+    const td = m[0]
+    const date = /\bdata-date="(\d{4}-\d{2}-\d{2})"/.exec(td)?.[1]
+    if (!date) continue
+    const id = /\bid="([^"]+)"/.exec(td)?.[1]
+    const level = /\bdata-level="(\d)"/.exec(td)?.[1]
+    const tip = id ? tips.get(id) : undefined
+    if (level == null || tip == null) throw new Error(`Calendar cell ${date} has no level or tooltip; the markup has changed`)
+    const n = /^No contributions\b/.test(tip) ? 0 : /^([\d,]+) contributions?\b/.exec(tip)?.[1]?.replace(/,/g, "")
+    if (n == null) throw new Error(`Can't read a count from "${tip}" (${date}); the markup has changed`)
+    const count = Number(n)
+    if ((count > 0) !== (+level > 0)) throw new Error(`Cell ${date}: count ${count} disagrees with level ${level}`)
+    days.push({ date, count })
+  }
+  days.sort((a, b) => (a.date < b.date ? -1 : 1))
+  if (days.length < 360) throw new Error(`Only ${days.length} days in the calendar; expected about a year`)
+  for (let i = 1; i < days.length; i++)
+    if (dayMs(days[i].date) - dayMs(days[i - 1].date) !== DAY_MS) throw new Error(`Calendar skips from ${days[i - 1].date} to ${days[i].date}`)
+  return days
+}
 
-async function fetchContributions(login, token) {
-  const res = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: { Authorization: `bearer ${token}`, "Content-Type": "application/json", "User-Agent": "contribution-skyline" },
-    body: JSON.stringify({ query: QUERY, variables: { login } }),
+async function fetchContributions(login) {
+  const res = await fetch(`https://github.com/users/${encodeURIComponent(login)}/contributions`, {
+    headers: { "User-Agent": "contribution-skyline", Accept: "text/html" },
   })
-  if (!res.ok) throw new Error(`GitHub GraphQL responded ${res.status}: ${(await res.text()).slice(0, 300)}`)
-  const json = await res.json()
-  if (json.errors?.length) throw new Error("GitHub GraphQL errors: " + json.errors.map((e) => e.message).join("; "))
-  const weeks = json.data?.user?.contributionsCollection?.contributionCalendar?.weeks
-  if (!Array.isArray(weeks) || !weeks.length) throw new Error(`No contribution calendar for user "${login}"`)
-  return weeks.flatMap((w) => w.contributionDays.map((d) => ({ date: d.date, count: d.contributionCount })))
+  if (!res.ok) throw new Error(`Contribution calendar for "${login}" responded ${res.status}`)
+  return parseCalendar(await res.text())
 }
 
 async function main() {
@@ -470,10 +496,8 @@ async function main() {
     data = generateContributions(dayMs(opt("end", toKey(Date.now()))), Number(opt("seed", 7)))
   } else {
     const user = opt("user", process.env.GITHUB_REPOSITORY_OWNER)
-    const token = process.env.GITHUB_TOKEN
     if (!user) throw new Error("Pass --user <login> (or set GITHUB_REPOSITORY_OWNER)")
-    if (!token) throw new Error("Set GITHUB_TOKEN; the contributions API needs authentication")
-    data = await fetchContributions(user, token)
+    data = await fetchContributions(user)
   }
   const model = buildModel(data)
   const updated = toKey(Date.now())
