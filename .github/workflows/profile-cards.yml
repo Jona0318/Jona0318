@@ -16,6 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Fails the job (and so publishes nothing) if real contribution data can't be fetched.
+      - name: Contribution skyline
+        run: node .github/scripts/contribution-skyline.mjs --user ${{ github.repository_owner }} --out dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.STATS_TOKEN || secrets.GITHUB_TOKEN }}
+
       - name: Stats card (light)
         uses: stats-organization/github-readme-stats-action@v2
         with:
@@ -31,14 +43,6 @@ jobs:
           options: username=${{ github.repository_owner }}&show_icons=true&hide_border=true&include_all_commits=true&count_private=true&theme=github_dark
           path: dist/stats-dark.svg
           token: ${{ secrets.STATS_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Snake animation
-        uses: Platane/snk@v3
-        with:
-          github_user_name: ${{ github.repository_owner }}
-          outputs: |
-            dist/github-snake.svg
-            dist/github-snake-dark.svg?palette=github-dark
 
       - name: Publish to output branch
         uses: crazy-max/ghaction-github-pages@v5
