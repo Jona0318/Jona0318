@@ -26,22 +26,6 @@ jobs:
       - name: Contribution skyline
         run: node .github/scripts/contribution-skyline.mjs --user ${{ github.repository_owner }} --out dist
 
-      - name: Stats card (light)
-        uses: stats-organization/github-readme-stats-action@v2
-        with:
-          card: stats
-          options: username=${{ github.repository_owner }}&show_icons=true&hide_border=true&include_all_commits=true&count_private=true
-          path: dist/stats.svg
-          token: ${{ secrets.STATS_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Stats card (dark)
-        uses: stats-organization/github-readme-stats-action@v2
-        with:
-          card: stats
-          options: username=${{ github.repository_owner }}&show_icons=true&hide_border=true&include_all_commits=true&count_private=true&theme=github_dark
-          path: dist/stats-dark.svg
-          token: ${{ secrets.STATS_TOKEN || secrets.GITHUB_TOKEN }}
-
       - name: Publish to output branch
         uses: crazy-max/ghaction-github-pages@v5
         with:
