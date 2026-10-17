@@ -12,7 +12,6 @@
  *
  * Usage:
  *   node contribution-skyline.mjs --user <login> --out <dir>
- *   node contribution-skyline.mjs --user <login> --commits --out <dir>   (commits only; needs SKYLINE_TOKEN)
  *   node contribution-skyline.mjs --demo --out <dir>      (seeded sample year, no network)
  *
  * Writes contribution-skyline.svg and contribution-skyline-dark.svg. Any
@@ -484,85 +483,6 @@ async function fetchContributions(login) {
   return parseCalendar(await res.text())
 }
 
-const COMMITS_QUERY = `query($login: String!, $from: DateTime!, $to: DateTime!) {
-  user(login: $login) {
-    contributionsCollection(from: $from, to: $to) {
-      commitContributionsByRepository(maxRepositories: 100) {
-        repository { nameWithOwner }
-        contributions(first: 100) { totalCount nodes { occurredAt commitCount } }
-      }
-    }
-  }
-}`
-
-// A window of at most 31 days keeps every repo under the 100-day page, so nothing needs paging.
-const WINDOW_DAYS = 30
-
-// A commit contribution's occurredAt is the start of its day in the author's time zone (22:00Z for
-// midnight CEST), so its calendar day is the UTC date half a day later.
-const commitDate = (iso) => {
-  const ms = Date.parse(iso)
-  if (!Number.isFinite(ms)) throw new Error(`Commit contribution has no usable date: "${iso}"`)
-  return toKey(ms + DAY_MS / 2)
-}
-
-/**
- * Reads one window of the GraphQL answer into [{ repo, date, count }]. Strict like parseCalendar: errors,
- * a missing user, a full page of repos or a repo with more days than were returned all mean the answer
- * may be partial, so it throws instead of drawing too few commits.
- */
-export const parseCommitWindow = (body) => {
-  if (body?.errors?.length) throw new Error(`GraphQL: ${body.errors.map((e) => e.message).join("; ")}`)
-  const repos = body?.data?.user?.contributionsCollection?.commitContributionsByRepository
-  if (!Array.isArray(repos)) throw new Error("GraphQL answer has no commit contributions; is the login right?")
-  if (repos.length >= 100) throw new Error("100 repos in one window; the list may be cut off")
-  const out = []
-  repos.forEach((r, i) => {
-    const repo = r?.repository?.nameWithOwner
-    const { totalCount, nodes } = r?.contributions ?? {}
-    if (!repo || !Array.isArray(nodes)) throw new Error(`Repo #${i} in the answer is malformed`)
-    if (nodes.length < totalCount) throw new Error(`Repo #${i}: ${totalCount} days but only ${nodes.length} returned`)
-    for (const n of nodes) {
-      if (!Number.isInteger(n?.commitCount) || n.commitCount < 1) throw new Error(`Repo #${i}: bad commit count ${n?.commitCount}`)
-      out.push({ repo, date: commitDate(n.occurredAt), count: n.commitCount })
-    }
-  })
-  return out
-}
-
-/**
- * Commits only, per day, for about the year the skyline shows. Needs a token: with one that can read the
- * user's private repos (a PAT in SKYLINE_TOKEN) their commits count too, but only the daily totals leave
- * this function, never repo names, since Action logs on a public repo are public.
- */
-export async function fetchCommits(login, token, now = Date.now(), request = fetch) {
-  if (!token) throw new Error("--commits needs a token in SKYLINE_TOKEN; refusing to fall back to all contributions")
-  const start = now - 371 * DAY_MS
-  const seen = new Map() // "repo|date" → count; a day on a window edge must not count twice
-  for (let from = start; from < now; from += WINDOW_DAYS * DAY_MS) {
-    const to = Math.min(from + WINDOW_DAYS * DAY_MS, now)
-    const res = await request("https://api.github.com/graphql", {
-      method: "POST",
-      headers: { Authorization: `bearer ${token}`, "User-Agent": "contribution-skyline", "Content-Type": "application/json" },
-      body: JSON.stringify({ query: COMMITS_QUERY, variables: { login, from: new Date(from).toISOString(), to: new Date(to).toISOString() } }),
-    })
-    if (!res.ok) throw new Error(`GitHub GraphQL responded ${res.status} for ${toKey(from)} — ${toKey(to)}`)
-    for (const c of parseCommitWindow(await res.json())) {
-      const k = c.repo + "|" + c.date
-      const prev = seen.get(k)
-      if (prev != null && prev !== c.count) throw new Error(`${c.date}: two windows disagree on one repo's commits (${prev} vs ${c.count})`)
-      seen.set(k, c.count)
-    }
-  }
-  const perDay = new Map()
-  for (const [k, count] of seen) {
-    const date = k.slice(k.lastIndexOf("|") + 1)
-    perDay.set(date, (perDay.get(date) ?? 0) + count)
-  }
-  // A zero for today pins the chart's last day to now, even after a quiet day.
-  return [...[...perDay].map(([date, count]) => ({ date, count })), { date: toKey(now), count: 0 }]
-}
-
 async function main() {
   const args = process.argv.slice(2)
   const opt = (name, fallback) => {
@@ -571,23 +491,21 @@ async function main() {
   }
   const out = opt("out", "dist")
   const palette = opt("palette", "github")
-  const commits = args.includes("--commits")
-  const unit = commits ? "commit" : "contribution"
   let data
   if (args.includes("--demo")) {
     data = generateContributions(dayMs(opt("end", toKey(Date.now()))), Number(opt("seed", 7)))
   } else {
     const user = opt("user", process.env.GITHUB_REPOSITORY_OWNER)
     if (!user) throw new Error("Pass --user <login> (or set GITHUB_REPOSITORY_OWNER)")
-    data = commits ? await fetchCommits(user, process.env.SKYLINE_TOKEN) : await fetchContributions(user)
+    data = await fetchContributions(user)
   }
   const model = buildModel(data)
   const updated = toKey(Date.now())
   await mkdir(out, { recursive: true })
   for (const [theme, file] of [["light", "contribution-skyline.svg"], ["dark", "contribution-skyline-dark.svg"]]) {
-    const svg = renderSkyline(model, { theme, palette, unit, updated })
+    const svg = renderSkyline(model, { theme, palette, updated })
     await writeFile(join(out, file), svg)
-    console.log(`${join(out, file)}  ${(svg.length / 1024).toFixed(0)} KB  ${model.stats.total} ${unit}s, ${model.cells.length} days`)
+    console.log(`${join(out, file)}  ${(svg.length / 1024).toFixed(0)} KB  ${model.stats.total} contributions, ${model.cells.length} days`)
   }
 }
 

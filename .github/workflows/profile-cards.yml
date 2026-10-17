@@ -22,12 +22,9 @@ jobs:
         with:
           node-version: 22
 
-      # Commits only. SKYLINE_TOKEN is a read-only PAT so private repos count too; without it, or if real
-      # data can't be fetched, the job fails and publishes nothing, keeping the last good chart.
+      # Fails the job (and so publishes nothing) if real contribution data can't be fetched.
       - name: Contribution skyline
-        run: node .github/scripts/contribution-skyline.mjs --user ${{ github.repository_owner }} --commits --out dist
-        env:
-          SKYLINE_TOKEN: ${{ secrets.SKYLINE_TOKEN }}
+        run: node .github/scripts/contribution-skyline.mjs --user ${{ github.repository_owner }} --out dist
 
       - name: Publish to output branch
         uses: crazy-max/ghaction-github-pages@v5

@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Jona0318/Jona0318/output/contribution-skyline-dark.svg" />
-    <img width="100%" src="https://raw.githubusercontent.com/Jona0318/Jona0318/output/contribution-skyline.svg" alt="A year of commits as a 3D skyline" />
+    <img width="100%" src="https://raw.githubusercontent.com/Jona0318/Jona0318/output/contribution-skyline.svg" alt="A year of contributions as a 3D skyline" />
   </picture>
 </p>
 
