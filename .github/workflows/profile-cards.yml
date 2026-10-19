@@ -24,7 +24,7 @@ jobs:
 
       # Fails the job (and so publishes nothing) if real contribution data can't be fetched.
       - name: Contribution skyline
-        run: node .github/scripts/contribution-skyline.mjs --user ${{ github.repository_owner }} --palette ember --out dist
+        run: node .github/scripts/contribution-skyline.mjs --user ${{ github.repository_owner }} --out dist
 
       - name: Publish to output branch
         uses: crazy-max/ghaction-github-pages@v5
